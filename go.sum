@@ -4,6 +4,8 @@ github.com/EntropyPool/entropy-logger v0.0.0-20210320022718-3091537e035f h1:oSny
 github.com/EntropyPool/entropy-logger v0.0.0-20210320022718-3091537e035f/go.mod h1:perlDQKCtiDeoe5S/iS6VlZluvMQ6KMDb6V23ulWMV4=
 github.com/NpoolRD/http-daemon v0.0.0-20210324100344-82fee56de8ac h1:FmZvMTqsfsxiLfqnDp9zYozFwRo673cRUuGP8bsBIaU=
 github.com/NpoolRD/http-daemon v0.0.0-20210324100344-82fee56de8ac/go.mod h1:1zc5D8V0YuVLbkAOLaWY7V4jaZ4iqOibGvJcx+SpZOM=
+github.com/NpoolRD/http-daemon v0.0.0-20210505073728-a1d91b8af9df h1:YZaFCGAilg1pQz30jSG7d/s2e0tvh4iZwtyJvqjvu7g=
+github.com/NpoolRD/http-daemon v0.0.0-20210505073728-a1d91b8af9df/go.mod h1:1zc5D8V0YuVLbkAOLaWY7V4jaZ4iqOibGvJcx+SpZOM=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d h1:U+s90UTSYgptZMwQh2aRr3LuazLJIa+Pg3Kc1ylSYVY=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

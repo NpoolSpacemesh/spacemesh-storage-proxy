@@ -84,38 +84,55 @@ func (p *StorageProxy) postPlotFile(file string) error {
 	selectedHostIndex := rand.Intn(len(p.config.StorageHosts))
 	host := p.config.StorageHosts[selectedHostIndex]
 
-	url := fmt.Sprintf("http://%v:%v/%v", p.config.LocalHost, p.config.FileServerPort, strings.Replace(file, "/mnt", PlotFilePrefix, -1))
+	if strings.HasPrefix(file, "/") {
+		file = strings.Replace(file, "/", "", 1)
+	}
+
+	url := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, PlotFilePrefix, file)
 	log.Infof(log.Fields{}, "try to serve file %v -> %v [%v]", url, host)
 
 	return nil
 }
 
 func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
+	log.Errorf(log.Fields{}, "fail to read body 11 %v", req.URL)
+
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to read body %v: %v", req.URL, err)
 		return nil, err.Error(), -1
 	}
 
 	input := types.NewPlotInput{}
 	err = json.Unmarshal(b, &input)
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to parse new plot %v: %v", input.PlotDir, err)
 		return nil, err.Error(), -2
 	}
 
 	_, err = os.Stat(input.PlotDir)
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to stat new plot %v: %v", input.PlotDir, err)
 		return nil, err.Error(), -3
 	}
 
+	processed := false
 	err = filepath.Walk(input.PlotDir, func(path string, info os.FileInfo, err error) error {
 		if !strings.HasSuffix(path, ".plot") {
 			log.Infof(log.Fields{}, "%v | %v is not regular plot file", input.PlotDir, path)
 			return nil
 		}
+		processed = true
 		return p.postPlotFile(path)
 	})
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", input.PlotDir, err)
 		return nil, err.Error(), -4
+	}
+
+	if !processed {
+		log.Errorf(log.Fields{}, "cannot find suitable plot file in %v", input.PlotDir)
+		return nil, "cannot find suitable plot file", -5
 	}
 
 	return nil, "", 0
@@ -138,6 +155,7 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		return nil, "invalid file description", -3
 	}
 
+	log.Infof(log.Fields{}, "remove finish plot file %v", filepath.Dir(files[1]))
 	os.RemoveAll(filepath.Dir(files[1]))
 
 	return nil, "", 0
@@ -161,20 +179,32 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 	}
 
 	newInput := types.NewPlotInput{
-		PlotDir: fmt.Sprintf("/mnt%v", filepath.Dir(files[1])),
+		PlotDir: filepath.Dir(files[1]),
 	}
 
+	log.Infof(log.Fields{}, "retry fail plot file %v", newInput.PlotDir)
 	resp, err := httpdaemon.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(newInput).
-		Post(fmt.Sprintf("http://%v:%v/%v", p.config.LocalHost, p.config.Port, types.NewPlotAPI))
+		Post(fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.NewPlotAPI))
 	if err != nil {
 		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
 		return nil, "fail to retry fail plot", -4
 	}
 	if resp.StatusCode() != 200 {
 		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
-		return nil, "fail to retry fail plot", -4
+		return nil, "fail to retry fail plot", -5
+	}
+
+	apiResp, err := httpdaemon.ParseResponse(resp)
+	if err != nil {
+		log.Errorf(log.Fields{}, "fail to parse fail retry response: %v", err)
+		return nil, err.Error(), -6
+	}
+
+	if apiResp.Code != 0 {
+		log.Errorf(log.Fields{}, "fail to retry fail plot: %v", apiResp.Msg)
+		return nil, apiResp.Msg, -7
 	}
 
 	return nil, "", 0
