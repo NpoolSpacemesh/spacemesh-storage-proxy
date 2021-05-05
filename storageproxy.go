@@ -114,7 +114,10 @@ func (p *StorageProxy) postPlotFile(file string) error {
 		})
 		if err != nil {
 			log.Errorf(log.Fields{}, "fail to notify new plot -> %v", host)
+			continue
 		}
+
+		break
 	}
 
 	return err
