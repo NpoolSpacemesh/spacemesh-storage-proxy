@@ -133,6 +133,13 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		return nil, err.Error(), -2
 	}
 
+	files := strings.Split(input.PlotFile, PlotFilePrefix)
+	if len(files) < 2 {
+		return nil, "invalid file description", -3
+	}
+
+	os.RemoveAll(filepath.Dir(files[1]))
+
 	return nil, "", 0
 }
 
@@ -146,6 +153,28 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 	err = json.Unmarshal(b, &input)
 	if err != nil {
 		return nil, err.Error(), -2
+	}
+
+	files := strings.Split(input.PlotFile, PlotFilePrefix)
+	if len(files) < 2 {
+		return nil, "invalid file description", -3
+	}
+
+	newInput := types.NewPlotInput{
+		PlotDir: fmt.Sprintf("/mnt%v", filepath.Dir(files[1])),
+	}
+
+	resp, err := httpdaemon.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(newInput).
+		Post(fmt.Sprintf("http://%v:%v/%v", p.config.LocalHost, p.config.Port, types.NewPlotAPI))
+	if err != nil {
+		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
+		return nil, "fail to retry fail plot", -4
+	}
+	if resp.StatusCode() != 200 {
+		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
+		return nil, "fail to retry fail plot", -4
 	}
 
 	return nil, "", 0
