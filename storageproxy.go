@@ -118,5 +118,7 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 		return nil, err.Error(), -4
 	}
 
+	os.RemoveAll(input.PlotDir)
+
 	return nil, "", 0
 }
