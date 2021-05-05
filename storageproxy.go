@@ -168,17 +168,20 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to read body of %v", req.URL)
 		return nil, err.Error(), -1
 	}
 
 	input := types.FinishPlotInput{}
 	err = json.Unmarshal(b, &input)
 	if err != nil {
+		log.Errorf(log.Fields{}, "fail to parse body of %v: %v", req.URL, err)
 		return nil, err.Error(), -2
 	}
 
 	files := strings.Split(input.PlotFile, PlotFilePrefix)
 	if len(files) < 2 {
+		log.Errorf(log.Fields{}, "invalid file description: %v", input.PlotFile)
 		return nil, "invalid file description", -3
 	}
 
