@@ -15,6 +15,7 @@ import (
 )
 
 type StorageProxyConfig struct {
+	LocalPlot      bool     `json:"localplot"`
 	LocalHost      string   `json:"host"`
 	Port           int      `json:"port"`
 	FileServerPort int      `json:"file_server_port"`
@@ -41,6 +42,10 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 	if err != nil {
 		log.Errorf(log.Fields{}, "cannot parse config file %v: %v", cfgFile, err)
 		return nil
+	}
+
+	if proxy.config.LocalPlot {
+		proxy.config.LocalHost = "127.0.0.1"
 	}
 
 	return proxy
@@ -86,6 +91,10 @@ func (p *StorageProxy) postPlotFile(file string) error {
 
 	if strings.HasPrefix(file, "/") {
 		file = strings.Replace(file, "/", "", 1)
+	}
+
+	if p.config.LocalPlot {
+		host = p.config.LocalHost
 	}
 
 	url := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, PlotFilePrefix, file)
