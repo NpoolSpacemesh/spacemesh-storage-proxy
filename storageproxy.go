@@ -2,32 +2,34 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	log "github.com/EntropyPool/entropy-logger"
 	"github.com/NpoolChia/chia-storage-proxy/types"
 	"github.com/NpoolRD/http-daemon"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 type StorageProxyConfig struct {
-	Port         int      `json:"port"`
-	StorageHosts []string `json:"storage_hosts"`
+	LocalHost      string   `json:"host"`
+	Port           int      `json:"port"`
+	FileServerPort int      `json:"file_server_port"`
+	StorageHosts   []string `json:"storage_hosts"`
 }
 
 type StorageProxy struct {
-	config       StorageProxyConfig
-	mutex        sync.Mutex
-	postingHosts map[string]int
+	config StorageProxyConfig
 }
 
+const PlotFilePrefix = "/plotfile"
+const PlotFileHandle = PlotFilePrefix + "/"
+
 func NewStorageProxy(cfgFile string) *StorageProxy {
-	proxy := &StorageProxy{
-		postingHosts: map[string]int{},
-	}
+	proxy := &StorageProxy{}
 
 	buf, err := ioutil.ReadFile(cfgFile)
 	if err != nil {
@@ -44,48 +46,46 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 	return proxy
 }
 
+func (p *StorageProxy) serveFile() {
+	http.Handle(PlotFileHandle, http.StripPrefix(PlotFileHandle, http.FileServer(http.Dir("/mnt"))))
+	for {
+		log.Infof(log.Fields{}, "start file server at %v", p.config.FileServerPort)
+		err := http.ListenAndServe(fmt.Sprintf(":%v", p.config.FileServerPort), nil)
+		if err != nil {
+			log.Errorf(log.Fields{}, "fail to listen plot file server %v: %v", p.config.FileServerPort, err)
+		}
+	}
+}
+
 func (p *StorageProxy) Run() error {
 	httpdaemon.RegisterRouter(httpdaemon.HttpRouter{
 		Location: types.NewPlotAPI,
 		Handler:  p.NewPlotRequest,
 		Method:   "POST",
 	})
+	httpdaemon.RegisterRouter(httpdaemon.HttpRouter{
+		Location: types.FinishPlotAPI,
+		Handler:  p.FinishPlotRequest,
+		Method:   "POST",
+	})
+	httpdaemon.RegisterRouter(httpdaemon.HttpRouter{
+		Location: types.FailPlotAPI,
+		Handler:  p.FailPlotRequest,
+		Method:   "POST",
+	})
 
 	httpdaemon.Run(p.config.Port)
+	go p.serveFile()
 
 	return nil
 }
 
 func (p *StorageProxy) postPlotFile(file string) error {
-	minPosting := 100
-	postHost := ""
+	selectedHostIndex := rand.Intn(len(p.config.StorageHosts))
+	host := p.config.StorageHosts[selectedHostIndex]
 
-	p.mutex.Lock()
-	for _, host := range p.config.StorageHosts {
-		postCount, ok := p.postingHosts[host]
-		if !ok {
-			p.postingHosts[host] = 0
-			postHost = host
-			break
-		}
-
-		if postCount < minPosting {
-			minPosting = postCount
-			postHost = host
-		}
-	}
-	p.postingHosts[postHost] += 1
-	p.mutex.Unlock()
-
-	log.Infof(log.Fields{}, "try to post file %v -> %v [%v]", file, postHost, minPosting)
-	// TODO: post plot file to host
-
-	p.mutex.Lock()
-	p.postingHosts[postHost] -= 1
-	if p.postingHosts[postHost] == 0 {
-		delete(p.postingHosts, postHost)
-	}
-	p.mutex.Unlock()
+	url := fmt.Sprintf("http://%v:%v/%v", p.config.LocalHost, p.config.FileServerPort, strings.Replace(file, "/mnt", PlotFilePrefix, -1))
+	log.Infof(log.Fields{}, "try to serve file %v -> %v [%v]", url, host)
 
 	return nil
 }
@@ -118,7 +118,35 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 		return nil, err.Error(), -4
 	}
 
-	os.RemoveAll(input.PlotDir)
+	return nil, "", 0
+}
+
+func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return nil, err.Error(), -1
+	}
+
+	input := types.FinishPlotInput{}
+	err = json.Unmarshal(b, &input)
+	if err != nil {
+		return nil, err.Error(), -2
+	}
+
+	return nil, "", 0
+}
+
+func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return nil, err.Error(), -1
+	}
+
+	input := types.FailPlotInput{}
+	err = json.Unmarshal(b, &input)
+	if err != nil {
+		return nil, err.Error(), -2
+	}
 
 	return nil, "", 0
 }
