@@ -54,7 +54,7 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 }
 
 func (p *StorageProxy) serveFile() {
-	http.Handle(PlotFileHandle, http.StripPrefix(PlotFileHandle, http.FileServer(http.Dir("/mnt"))))
+	http.Handle(PlotFileHandle, http.StripPrefix(PlotFileHandle, http.FileServer(http.Dir("/"))))
 	for {
 		log.Infof(log.Fields{}, "start file server at %v", p.config.FileServerPort)
 		err := http.ListenAndServe(fmt.Sprintf(":%v", p.config.FileServerPort), nil)
@@ -107,7 +107,7 @@ func (p *StorageProxy) postPlotFile(file string) error {
 		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
 
 		log.Infof(log.Fields{}, "try to serve file %v -> %v", plotUrl, host)
-		_, err = chiaapi.UploadChiaPlot(fmt.Sprintf("%v:18080", host), apitypes.UploadPlotInput{
+		_, err = chiaapi.UploadChiaPlot(host, "18080", apitypes.UploadPlotInput{
 			PlotURL:   plotUrl,
 			FinishURL: finishUrl,
 			FailURL:   failUrl,
