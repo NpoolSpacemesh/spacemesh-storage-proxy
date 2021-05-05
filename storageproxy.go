@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -73,8 +74,10 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 	}
 
 	err = filepath.Walk(input.PlotDir, func(path string, info os.FileInfo, err error) error {
-		b, _ := json.Marshal(info)
-		log.Infof(log.Fields{}, "walk to %v in %v [%v]", input.PlotDir, path, string(b))
+		if !strings.HasSuffix(path, ".plot") {
+			log.Infof(log.Fields{}, "%v | %v is not regular plot file", input.PlotDir, path)
+			return nil
+		}
 		return nil
 	})
 	if err != nil {
