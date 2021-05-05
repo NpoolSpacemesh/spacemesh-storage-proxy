@@ -5,6 +5,8 @@ import (
 	"fmt"
 	log "github.com/EntropyPool/entropy-logger"
 	"github.com/NpoolChia/chia-storage-proxy/types"
+	"github.com/NpoolChia/chia-storage-server/chiaapi"
+	apitypes "github.com/NpoolChia/chia-storage-server/types"
 	"github.com/NpoolRD/http-daemon"
 	"io/ioutil"
 	"math/rand"
@@ -86,26 +88,39 @@ func (p *StorageProxy) Run() error {
 }
 
 func (p *StorageProxy) postPlotFile(file string) error {
-	selectedHostIndex := rand.Intn(len(p.config.StorageHosts))
-	host := p.config.StorageHosts[selectedHostIndex]
+	var err error
 
-	if strings.HasPrefix(file, "/") {
-		file = strings.Replace(file, "/", "", 1)
+	for retries := 0; retries < 5; retries++ {
+		selectedHostIndex := rand.Intn(len(p.config.StorageHosts))
+		host := p.config.StorageHosts[selectedHostIndex]
+
+		if strings.HasPrefix(file, "/") {
+			file = strings.Replace(file, "/", "", 1)
+		}
+
+		if p.config.LocalPlot {
+			host = p.config.LocalHost
+		}
+
+		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, PlotFilePrefix, file)
+		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
+		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+
+		log.Infof(log.Fields{}, "try to serve file %v -> %v", plotUrl, host)
+		_, err = chiaapi.UploadChiaPlot(fmt.Sprintf("%v:18080", host), apitypes.UploadPlotInput{
+			PlotURL:   plotUrl,
+			FinishURL: finishUrl,
+			FailURL:   failUrl,
+		})
+		if err != nil {
+			log.Errorf(log.Fields{}, "fail to notify new plot -> %v", host)
+		}
 	}
 
-	if p.config.LocalPlot {
-		host = p.config.LocalHost
-	}
-
-	url := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, PlotFilePrefix, file)
-	log.Infof(log.Fields{}, "try to serve file %v -> %v [%v]", url, host)
-
-	return nil
+	return err
 }
 
 func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
-	log.Errorf(log.Fields{}, "fail to read body 11 %v", req.URL)
-
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		log.Errorf(log.Fields{}, "fail to read body %v: %v", req.URL, err)
