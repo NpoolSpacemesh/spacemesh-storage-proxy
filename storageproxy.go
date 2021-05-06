@@ -97,7 +97,7 @@ func (p *StorageProxy) postPlotFile(file string) error {
 	for retries := 0; retries < len(p.config.StorageHosts); retries++ {
 		p.mutex.Lock()
 		selectedHostIndex := p.curHostIndex
-		p.curHostIndex = (p.curHostIndex) % len(p.config.StorageHosts)
+		p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
 		p.mutex.Unlock()
 		host := p.config.StorageHosts[selectedHostIndex]
 
