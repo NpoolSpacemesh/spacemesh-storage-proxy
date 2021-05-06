@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type StorageProxyConfig struct {
@@ -25,7 +26,9 @@ type StorageProxyConfig struct {
 }
 
 type StorageProxy struct {
-	config StorageProxyConfig
+	config       StorageProxyConfig
+	curHostIndex int
+	mutex        sync.Mutex
 }
 
 const PlotFilePrefix = "/plotfile"
@@ -49,6 +52,7 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 	if proxy.config.LocalPlot {
 		proxy.config.LocalHost = "127.0.0.1"
 	}
+	proxy.curHostIndex = rand.Intn(len(proxy.config.StorageHosts))
 
 	return proxy
 }
@@ -91,7 +95,10 @@ func (p *StorageProxy) postPlotFile(file string) error {
 	var err error
 
 	for retries := 0; retries < 5; retries++ {
-		selectedHostIndex := rand.Intn(len(p.config.StorageHosts))
+		p.mutex.Lock()
+		selectedHostIndex := p.curHostIndex
+		p.curHostIndex = (p.curHostIndex) % len(p.config.StorageHosts)
+		p.mutex.Unlock()
 		host := p.config.StorageHosts[selectedHostIndex]
 
 		if strings.HasPrefix(file, "/") {
