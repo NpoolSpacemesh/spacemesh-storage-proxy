@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type StorageProxyConfig struct {
@@ -52,6 +53,7 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 	if proxy.config.LocalPlot {
 		proxy.config.LocalHost = "127.0.0.1"
 	}
+	rand.Seed(time.Now().UnixNano())
 	proxy.curHostIndex = rand.Intn(len(proxy.config.StorageHosts))
 
 	return proxy
