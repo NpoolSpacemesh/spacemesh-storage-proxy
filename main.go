@@ -1,10 +1,11 @@
 package main
 
 import (
+	"os"
+
 	log "github.com/EntropyPool/entropy-logger"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
-	"os"
 )
 
 func main() {

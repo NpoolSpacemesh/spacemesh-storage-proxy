@@ -3,11 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	log "github.com/EntropyPool/entropy-logger"
-	"github.com/NpoolChia/chia-storage-proxy/types"
-	"github.com/NpoolChia/chia-storage-server/chiaapi"
-	apitypes "github.com/NpoolChia/chia-storage-server/types"
-	"github.com/NpoolRD/http-daemon"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -16,6 +11,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/EntropyPool/entropy-logger"
+	"github.com/NpoolChia/chia-storage-proxy/types"
+	"github.com/NpoolChia/chia-storage-server/chiaapi"
+	apitypes "github.com/NpoolChia/chia-storage-server/types"
+	httpdaemon "github.com/NpoolRD/http-daemon"
+	"github.com/fsnotify/fsnotify"
 )
 
 type StorageProxyConfig struct {
@@ -35,9 +37,89 @@ type StorageProxy struct {
 const PlotFilePrefix = "/plotfile"
 const PlotFileHandle = PlotFilePrefix + "/"
 
+// watcherCfgFile 监测配置文件变更
+func (p *StorageProxy) watcherCfgFile(cfgFile string) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalf(log.Fields{}, "watch config file %v", err)
+	}
+	defer watcher.Close()
+	err = watcher.Add(cfgFile)
+	if err != nil {
+		log.Fatalf(log.Fields{}, "add watch config file path %v", err)
+	}
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				continue
+			}
+			// 1. 文件修改 2. 文件被删除，放入新文件
+			if event.Op&fsnotify.Write == fsnotify.Write ||
+				event.Op&fsnotify.Chmod == fsnotify.Chmod {
+				// backup old file
+				backup(cfgFile+".old", p.config)
+				go func() {
+					var err error
+					defer func() {
+						if err != nil {
+							// will auto watch
+							restore(cfgFile, cfgFile+".old")
+						}
+					}()
+
+					cfg := StorageProxyConfig{}
+					buf, err := ioutil.ReadFile(cfgFile)
+					if err != nil {
+						log.Errorf(log.Fields{}, "cannot read config file %v: %v", cfgFile, err)
+						return
+					}
+
+					err = json.Unmarshal(buf, &cfg)
+					if err != nil {
+						log.Errorf(log.Fields{}, "cannot parse config file %v: %v", cfgFile, err)
+						return
+					}
+
+					if cfg.LocalPlot {
+						cfg.LocalHost = "127.0.0.1"
+					}
+					rand.Seed(time.Now().UnixNano())
+					p.mutex.Lock()
+					p.config = cfg
+					p.curHostIndex = rand.Intn(len(cfg.StorageHosts))
+					p.mutex.Unlock()
+				}()
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				continue
+			}
+			log.Errorf(log.Fields{}, "watch config file %v", err)
+		}
+	}
+}
+
+// backup 备份
+func backup(dst string, cfg StorageProxyConfig) error {
+	_b, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(dst, _b, 0644)
+}
+
+// restore 恢复
+func restore(dst, src string) error {
+	_b, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(dst, _b, 0644)
+}
+
 func NewStorageProxy(cfgFile string) *StorageProxy {
 	proxy := &StorageProxy{}
-
 	buf, err := ioutil.ReadFile(cfgFile)
 	if err != nil {
 		log.Errorf(log.Fields{}, "cannot read config file %v: %v", cfgFile, err)
@@ -55,6 +137,9 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 	}
 	rand.Seed(time.Now().UnixNano())
 	proxy.curHostIndex = rand.Intn(len(proxy.config.StorageHosts))
+
+	// 监听文件变更
+	go proxy.watcherCfgFile(cfgFile)
 
 	return proxy
 }
