@@ -109,15 +109,6 @@ func (q *queue) IsAdded(key string) bool {
 	q.lock.Unlock()
 	return ok
 }
-
-// DelKey 删除
-func (q *queue) DelKey(key string) error {
-	q.lock.Lock()
-	delete(q.added, key)
-	q.lock.Unlock()
-	return nil
-}
-
 func (q *queue) run() {
 	for {
 		select {

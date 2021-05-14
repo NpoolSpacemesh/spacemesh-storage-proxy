@@ -25,8 +25,6 @@ func Upload(input Meta) {
 		FailURL:   input.FailURL,
 	})
 	if err != nil {
-		// 重试
-		update(input.PlotURL, TaskTodo)
 		log.Errorf(log.Fields{}, "fail to notify new plot -> %v", input.Host)
 		return
 	}
