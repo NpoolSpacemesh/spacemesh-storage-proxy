@@ -4,11 +4,18 @@ import (
 	"os"
 
 	log "github.com/EntropyPool/entropy-logger"
+	"github.com/NpoolChia/chia-storage-proxy/db"
+	"github.com/NpoolChia/chia-storage-proxy/task"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 )
 
 func main() {
+	// 任务队列
+	task.NewQueue(100)
+	task.AddCallBack(task.TaskTodo, task.Upload)
+	task.AddCallBack(task.TaskFinish, task.Finsih)
+
 	app := &cli.App{
 		Name:                 "chia-storage-proxy",
 		Usage:                "Storage proxy for chia plotter",
@@ -27,6 +34,9 @@ func main() {
 			if proxy == nil {
 				return xerrors.Errorf("cannot create storage proxy with %v", cfgFile)
 			}
+
+			// Init database
+			db.InitBoltClient(proxy.config.DBPath)
 
 			err := proxy.Run()
 			if err != nil {

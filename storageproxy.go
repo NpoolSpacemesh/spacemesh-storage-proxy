@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,14 +14,18 @@ import (
 	"time"
 
 	log "github.com/EntropyPool/entropy-logger"
+	"github.com/NpoolChia/chia-storage-proxy/db"
+	"github.com/NpoolChia/chia-storage-proxy/task"
 	"github.com/NpoolChia/chia-storage-proxy/types"
 	"github.com/NpoolChia/chia-storage-server/chiaapi"
 	apitypes "github.com/NpoolChia/chia-storage-server/types"
 	httpdaemon "github.com/NpoolRD/http-daemon"
+	"github.com/boltdb/bolt"
 	"github.com/fsnotify/fsnotify"
 )
 
 type StorageProxyConfig struct {
+	DBPath         string   `json:"db_path"`
 	LocalPlot      bool     `json:"localplot"`
 	LocalHost      string   `json:"host"`
 	Port           int      `json:"port"`
@@ -33,9 +38,6 @@ type StorageProxy struct {
 	curHostIndex int
 	mutex        sync.Mutex
 }
-
-const PlotFilePrefix = "/plotfile"
-const PlotFileHandle = PlotFilePrefix + "/"
 
 // watcherCfgFile 监测配置文件变更
 func (p *StorageProxy) watcherCfgFile(cfgFile string) {
@@ -145,7 +147,7 @@ func NewStorageProxy(cfgFile string) *StorageProxy {
 }
 
 func (p *StorageProxy) serveFile() {
-	http.Handle(PlotFileHandle, http.StripPrefix(PlotFileHandle, http.FileServer(http.Dir("/"))))
+	http.Handle(task.PlotFileHandle, http.StripPrefix(task.PlotFileHandle, http.FileServer(http.Dir("/"))))
 	for {
 		log.Infof(log.Fields{}, "start file server at %v", p.config.FileServerPort)
 		err := http.ListenAndServe(fmt.Sprintf(":%v", p.config.FileServerPort), nil)
@@ -196,7 +198,7 @@ func (p *StorageProxy) postPlotFile(file string) error {
 			host = p.config.LocalHost
 		}
 
-		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, PlotFilePrefix, file)
+		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
 		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
 		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
 
@@ -244,7 +246,57 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 			return nil
 		}
 		processed = true
-		return p.postPlotFile(path)
+
+		var (
+			file, host string
+		)
+		p.mutex.Lock()
+		selectedHostIndex := p.curHostIndex
+		p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
+		p.mutex.Unlock()
+		host = p.config.StorageHosts[selectedHostIndex]
+
+		if strings.HasPrefix(path, "/") {
+			file = strings.Replace(path, "/", "", 1)
+		}
+
+		if p.config.LocalPlot {
+			host = p.config.LocalHost
+		}
+
+		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
+		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
+		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+
+		// 入库
+		// 更新数据库的数据的状态
+		bdb, err := db.BoltClient()
+		if err != nil {
+			log.Infof(log.Fields{}, "get bolt db client error %v", path)
+			return nil
+		}
+		if err := bdb.Update(func(tx *bolt.Tx) error {
+			bk := tx.Bucket(db.DefaultBucket)
+			if r := bk.Get([]byte(input.PlotDir)); r != nil {
+				return fmt.Errorf("chia plot file url: %s already added", plotUrl)
+			}
+			meta := task.Meta{
+				Status:    task.TaskTodo,
+				Host:      host,
+				PlotURL:   plotUrl,
+				FinishURL: finishUrl,
+				FailURL:   failUrl,
+			}
+			ms, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			return bk.Put([]byte(plotUrl), ms)
+		}); err != nil {
+			log.Errorf(log.Fields{}, "%v fail to bolt database %v", input.PlotDir, err)
+			return nil
+		}
+		return nil
 	})
 	if err != nil {
 		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", input.PlotDir, err)
@@ -272,15 +324,30 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		log.Errorf(log.Fields{}, "fail to parse body of %v: %v", req.URL, err)
 		return nil, err.Error(), -2
 	}
-
-	files := strings.Split(input.PlotFile, PlotFilePrefix)
-	if len(files) < 2 {
-		log.Errorf(log.Fields{}, "invalid file description: %v", input.PlotFile)
-		return nil, "invalid file description", -3
+	// 更新数据库的数据的状态
+	bdb, err := db.BoltClient()
+	if err != nil {
+		return nil, err.Error(), -3
 	}
-
-	log.Infof(log.Fields{}, "remove finish plot file %v", filepath.Dir(files[1]))
-	os.RemoveAll(filepath.Dir(files[1]))
+	if err := bdb.Update(func(tx *bolt.Tx) error {
+		bk := tx.Bucket(db.DefaultBucket)
+		r := bk.Get([]byte(input.PlotFile))
+		if r != nil {
+			return fmt.Errorf("chia plot file url: %s already added", input.PlotFile)
+		}
+		meta := task.Meta{}
+		if err := json.Unmarshal(r, &meta); err != nil {
+			return nil
+		}
+		meta.Status = task.TaskFinish
+		ms, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		return bk.Put([]byte(input.PlotFile), ms)
+	}); err != nil {
+		return nil, err.Error(), -4
+	}
 
 	return nil, "", 0
 }
@@ -297,38 +364,57 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		return nil, err.Error(), -2
 	}
 
-	files := strings.Split(input.PlotFile, PlotFilePrefix)
-	if len(files) < 2 {
-		return nil, "invalid file description", -3
-	}
+	p.mutex.Lock()
+	selectedHostIndex := p.curHostIndex
+	p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
+	p.mutex.Unlock()
+	host := p.config.StorageHosts[selectedHostIndex]
 
-	newInput := types.NewPlotInput{
-		PlotDir: filepath.Dir(files[1]),
-	}
-
-	log.Infof(log.Fields{}, "retry fail plot file %v", newInput.PlotDir)
-	resp, err := httpdaemon.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(newInput).
-		Post(fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.NewPlotAPI))
+	_u, err := url.Parse(input.PlotFile)
 	if err != nil {
-		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
-		return nil, "fail to retry fail plot", -4
-	}
-	if resp.StatusCode() != 200 {
-		log.Errorf(log.Fields{}, "fail to retry fail plot %v: %v", input.PlotFile, err)
-		return nil, "fail to retry fail plot", -5
+		return nil, err.Error(), -3
 	}
 
-	apiResp, err := httpdaemon.ParseResponse(resp)
+	if p.config.LocalPlot {
+		host = p.config.LocalHost
+	}
+
+	plotUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.FileServerPort, _u.Path)
+	finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
+	failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+
+	// 更新数据库的数据的状态
+	bdb, err := db.BoltClient()
 	if err != nil {
-		log.Errorf(log.Fields{}, "fail to parse fail retry response: %v", err)
-		return nil, err.Error(), -6
+		return nil, err.Error(), -4
 	}
+	if err := bdb.Update(func(tx *bolt.Tx) error {
+		bk := tx.Bucket(db.DefaultBucket)
+		r := bk.Get([]byte(input.PlotFile))
+		if r == nil {
+			return fmt.Errorf("chia plot file url: %s already added", input.PlotFile)
+		}
 
-	if apiResp.Code != 0 {
-		log.Errorf(log.Fields{}, "fail to retry fail plot: %v", apiResp.Msg)
-		return nil, apiResp.Msg, -7
+		// 删除原有的
+		if err := bk.Delete([]byte(input.PlotFile)); err != nil {
+			return err
+		}
+
+		// 重新选择别的存储节点
+		meta := task.Meta{
+			Status:    task.TaskTodo,
+			Host:      host,
+			PlotURL:   plotUrl,
+			FailURL:   failUrl,
+			FinishURL: finishUrl,
+		}
+		ms, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		return bk.Put([]byte(plotUrl), ms)
+	}); err != nil {
+		return nil, err.Error(), -5
 	}
 
 	return nil, "", 0
