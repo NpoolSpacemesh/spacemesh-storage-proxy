@@ -340,7 +340,7 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		}
 		meta := task.Meta{}
 		if err := json.Unmarshal(r, &meta); err != nil {
-			return nil
+			return err
 		}
 		meta.Status = task.TaskFinish
 		ms, err := json.Marshal(meta)
@@ -395,7 +395,7 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		bk := tx.Bucket(db.DefaultBucket)
 		r := bk.Get([]byte(input.PlotFile))
 		if r == nil {
-			return fmt.Errorf("chia plot file url: %s already added", input.PlotFile)
+			return fmt.Errorf("chia plot file %v not find", input.PlotFile)
 		}
 
 		// 删除原有的

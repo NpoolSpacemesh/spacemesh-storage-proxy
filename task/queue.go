@@ -21,6 +21,8 @@ const (
 const (
 	TaskErr uint8 = iota
 	TaskTodo
+	// 等待处理不进入队列
+	TaskWait
 	TaskFinish
 	TaskDone
 )
@@ -145,7 +147,9 @@ func (q *queue) fetch() {
 					log.Errorf(log.Fields{}, "fetch bolt data to queue error %v", err)
 					return nil
 				}
-				if !IsAdded(meta.PlotURL) && meta.Status != TaskDone {
+				if !IsAdded(meta.PlotURL) &&
+					(meta.Status != TaskDone &&
+						meta.Status != TaskWait) {
 					// TODO 同步数据优化
 					globalQueue.Add(meta)
 				}
