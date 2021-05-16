@@ -50,7 +50,8 @@ type Qer interface {
 	AddCallBack(uint8, func(Meta))
 	// TODO 清理已经是 DONE 的 key
 	IsAdded(key string) bool
-
+	//delete map
+	delKey(string)
 	// fetch
 	fetch()
 	// run
@@ -109,12 +110,17 @@ func (q *queue) IsAdded(key string) bool {
 	q.lock.Unlock()
 	return ok
 }
+func (q *queue) delKey(key string) {
+	q.lock.Lock()
+	delete(q.added, key)
+	q.lock.Unlock()
+}
 func (q *queue) run() {
 	for {
 		select {
 		case m := <-q.q:
 			go func() {
-				defer delete(q.added, m.PlotURL)
+				defer q.delKey(m.PlotURL)
 				// 这里需要小心 可以使用 ok 形式
 				q.callback[m.Status](m)
 			}()
