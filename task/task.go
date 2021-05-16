@@ -28,7 +28,6 @@ func Upload(input Meta) {
 		log.Errorf(log.Fields{}, "fail to notify new plot -> %v", input.Host)
 		return
 	}
-	update(input.PlotURL, TaskFinish)
 }
 
 func Finsih(input Meta) {
