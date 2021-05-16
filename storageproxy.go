@@ -335,8 +335,8 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 	if err := bdb.Update(func(tx *bolt.Tx) error {
 		bk := tx.Bucket(db.DefaultBucket)
 		r := bk.Get([]byte(input.PlotFile))
-		if r != nil {
-			return fmt.Errorf("chia plot file url: %s already added", input.PlotFile)
+		if r == nil {
+			return fmt.Errorf("chia plot file %v not found", input.PlotFile)
 		}
 		meta := task.Meta{}
 		if err := json.Unmarshal(r, &meta); err != nil {
