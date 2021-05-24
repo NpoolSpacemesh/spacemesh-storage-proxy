@@ -17,3 +17,54 @@
   ]
 }
 ```
+
+## service 文件
+```
+cat << EOF > /etc/systemd/system/chia-storage-proxy.service
+[Unit]
+Description=Chia Plotter
+After=lotus-mount-disk.service
+
+[Service]
+ExecStart=/usr/local/bin/chia-storage-proxy --config /etc/chia-storage-proxy.conf
+Restart=always
+RestartSec=10
+MemoryAccounting=true
+MemoryHigh=infinity
+MemoryMax=infinity
+Nice=-20
+LimitNICE=-20
+LimitNOFILE=1048576:1048576
+LimitCORE=infinity
+LimitNPROC=819200:1048576
+IOWeight=9999
+CPUWeight=1000
+LimitCORE=1024
+Delegate=yes
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+----
+
+## 部署
+
+部署相关的文件
+
++ chia-storage-proxy
++ chia-storage-proxy.conf
++ chia-storage-proxy.service
+
+| 文件                       | 部署路径            | 说明         |
+| :------------------------- | :------------------ | :----------- |
+| chia-storage-proxy         | /usr/local/bin      |              |
+| chia-storage-proxy.conf    | /etc                | 配置文件     |
+| chia-storage-proxy.service | /etc/systemd/system | service 文件 |
+
+**注**
+**chia-storage-proxy** 服务要设置自启动
+```
+  systemctl enable chia-storage-proxy
+```
