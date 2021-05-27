@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -21,7 +22,6 @@ import (
 	apitypes "github.com/NpoolChia/chia-storage-server/types"
 	httpdaemon "github.com/NpoolRD/http-daemon"
 	"github.com/boltdb/bolt"
-	"github.com/fsnotify/fsnotify"
 )
 
 type StorageProxyConfig struct {
@@ -39,66 +39,54 @@ type StorageProxy struct {
 	mutex        sync.Mutex
 }
 
+var (
+	_md5 [md5.Size]byte
+)
+
 // watcherCfgFile 监测配置文件变更
 func (p *StorageProxy) watcherCfgFile(cfgFile string) {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatalf(log.Fields{}, "watch config file %v", err)
-	}
-	defer watcher.Close()
-	err = watcher.Add(cfgFile)
-	if err != nil {
-		log.Fatalf(log.Fields{}, "add watch config file path %v", err)
-	}
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				continue
-			}
-			// 1. 文件修改 2. 文件被删除，放入新文件
-			if event.Op&fsnotify.Write == fsnotify.Write ||
-				event.Op&fsnotify.Chmod == fsnotify.Chmod {
-				// backup old file
-				backup(cfgFile+".old", p.config)
-				go func() {
-					var err error
-					defer func() {
-						if err != nil {
-							// will auto watch
-							restore(cfgFile, cfgFile+".old")
-						}
-					}()
+	tick := time.NewTicker(5 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		// backup old file
+		backup(cfgFile+".old", p.config)
+		go func() {
+			var err error
+			defer func() {
+				if err != nil {
+					// will auto watch
+					restore(cfgFile, cfgFile+".old")
+				}
+			}()
 
-					cfg := StorageProxyConfig{}
-					buf, err := ioutil.ReadFile(cfgFile)
-					if err != nil {
-						log.Errorf(log.Fields{}, "cannot read config file %v: %v", cfgFile, err)
-						return
-					}
-
-					err = json.Unmarshal(buf, &cfg)
-					if err != nil {
-						log.Errorf(log.Fields{}, "cannot parse config file %v: %v", cfgFile, err)
-						return
-					}
-
-					if cfg.LocalPlot {
-						cfg.LocalHost = "127.0.0.1"
-					}
-					rand.Seed(time.Now().UnixNano())
-					p.mutex.Lock()
-					p.config = cfg
-					p.curHostIndex = rand.Intn(len(cfg.StorageHosts))
-					p.mutex.Unlock()
-				}()
+			cfg := StorageProxyConfig{}
+			buf, err := ioutil.ReadFile(cfgFile)
+			if err != nil {
+				log.Errorf(log.Fields{}, "cannot read config file %v: %v", cfgFile, err)
+				return
 			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				continue
+
+			m5 := md5.Sum(buf)
+			if m5 == _md5 {
+				return
 			}
-			log.Errorf(log.Fields{}, "watch config file %v", err)
-		}
+			_md5 = m5
+			err = json.Unmarshal(buf, &cfg)
+			if err != nil {
+				log.Errorf(log.Fields{}, "cannot parse config file %v: %v", cfgFile, err)
+				return
+			}
+
+			if cfg.LocalPlot {
+				cfg.LocalHost = "127.0.0.1"
+			}
+			rand.Seed(time.Now().UnixNano())
+			p.mutex.Lock()
+			p.config = cfg
+			p.curHostIndex = rand.Intn(len(cfg.StorageHosts))
+			p.mutex.Unlock()
+			log.Infof(log.Fields{}, "config file %v", p.config.StorageHosts)
+		}()
 	}
 }
 
