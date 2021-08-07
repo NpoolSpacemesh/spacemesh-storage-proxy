@@ -229,17 +229,17 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 
 	processed := false
 	err = filepath.Walk(input.PlotDir, func(path string, info os.FileInfo, err error) error {
+		if !strings.HasSuffix(path, ".plot") {
+			return nil
+		}
 		if info == nil {
+			log.Infof(log.Fields{}, "%v do not have valid info", path)
 			return nil
 		}
 		if err != nil {
 			return nil
 		}
 		if info.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".plot") {
-			log.Infof(log.Fields{}, "%v | %v is not regular plot file", input.PlotDir, path)
 			return nil
 		}
 		processed = true

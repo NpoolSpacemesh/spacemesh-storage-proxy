@@ -40,7 +40,7 @@ func Finsih(input Meta) {
 		log.Errorf(log.Fields{}, "invalid file description: %v", input.PlotURL)
 		return
 	}
-	log.Infof(log.Fields{}, "remove finish plot file %v", filepath.Dir(files[1]))
+	log.Infof(log.Fields{}, "remove finish plot file %v", files[1])
 	_, err := os.Stat(filepath.Dir(files[1]))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -48,11 +48,11 @@ func Finsih(input Meta) {
 			update(input.PlotURL, TaskDone)
 			return
 		}
-		log.Errorf(log.Fields{}, "remove finish plot file %v, error %v", filepath.Dir(files[1]), err)
+		log.Errorf(log.Fields{}, "remove finish plot file %v, error %v", files[1], err)
 		return
 	}
 
-	os.RemoveAll(filepath.Dir(files[1]))
+	os.RemoveAll(files[1])
 	// 更新数据库
 	update(input.PlotURL, TaskDone)
 }
