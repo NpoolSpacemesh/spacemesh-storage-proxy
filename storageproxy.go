@@ -287,6 +287,22 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 			log.Errorf(log.Fields{}, "%v fail to bolt database %v", plotUrl, err)
 			return nil
 		}
+
+		for {
+			_, err := os.Stat(path)
+			if err == nil {
+				log.Infof(log.Fields{}, "Waiting for %v finish", path)
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			if os.IsNotExist(err) {
+				log.Infof(log.Fields{}, "%v finished", path)
+				break
+			}
+			log.Errorf(log.Fields{}, "CANNOT determine %v's stat", path)
+			break
+		}
+
 		return nil
 	})
 	if err != nil {
