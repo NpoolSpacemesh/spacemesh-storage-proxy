@@ -229,6 +229,12 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 
 	processed := false
 	err = filepath.Walk(input.PlotDir, func(path string, info os.FileInfo, err error) error {
+		if info == nil {
+			return nil
+		}
+		if err != nil {
+			return nil
+		}
 		if info.IsDir() {
 			return nil
 		}
