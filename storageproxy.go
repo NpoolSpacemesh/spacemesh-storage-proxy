@@ -242,6 +242,9 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 		if info.IsDir() {
 			return nil
 		}
+		if info.Size() == 0 {
+			return nil
+		}
 		processed = true
 
 		var (
