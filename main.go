@@ -4,8 +4,8 @@ import (
 	"os"
 
 	log "github.com/EntropyPool/entropy-logger"
-	"github.com/NpoolChia/chia-storage-proxy/db"
-	"github.com/NpoolChia/chia-storage-proxy/task"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/db"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/task"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 )
@@ -17,14 +17,14 @@ func main() {
 	task.AddCallBack(task.TaskFinish, task.Finsih)
 
 	app := &cli.App{
-		Name:                 "chia-storage-proxy",
-		Usage:                "Storage proxy for chia plotter",
+		Name:                 "spacemesh-storage-proxy",
+		Usage:                "Storage proxy for spacemesh plotter",
 		Version:              "0.1.0",
 		EnableBashCompletion: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "config",
-				Value: "/etc/chia-storage-proxy.conf",
+				Value: "/etc/spacemesh-storage-proxy.conf",
 			},
 		},
 		Action: func(cctx *cli.Context) error {

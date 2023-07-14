@@ -6,7 +6,7 @@ import (
 	"time"
 
 	log "github.com/EntropyPool/entropy-logger"
-	"github.com/NpoolChia/chia-storage-proxy/db"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/db"
 	"github.com/boltdb/bolt"
 )
 

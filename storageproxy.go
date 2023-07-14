@@ -15,12 +15,12 @@ import (
 	"time"
 
 	log "github.com/EntropyPool/entropy-logger"
-	"github.com/NpoolChia/chia-storage-proxy/db"
-	"github.com/NpoolChia/chia-storage-proxy/task"
-	"github.com/NpoolChia/chia-storage-proxy/types"
-	"github.com/NpoolChia/chia-storage-server/chiaapi"
-	apitypes "github.com/NpoolChia/chia-storage-server/types"
 	httpdaemon "github.com/NpoolRD/http-daemon"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/db"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/task"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/types"
+	"github.com/NpoolSpacemesh/spacemesh-storage-server/api"
+	apitypes "github.com/NpoolSpacemesh/spacemesh-storage-server/types"
 	"github.com/boltdb/bolt"
 )
 
@@ -191,7 +191,7 @@ func (p *StorageProxy) postPlotFile(file string) error {
 		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
 
 		log.Infof(log.Fields{}, "try to serve file %v -> %v", plotUrl, host)
-		_, err = chiaapi.UploadChiaPlot(host, "18080", apitypes.UploadPlotInput{
+		_, err = api.UploadPlot(host, "18080", apitypes.UploadPlotInput{
 			PlotURL:   plotUrl,
 			FinishURL: finishUrl,
 			FailURL:   failUrl,
@@ -278,7 +278,7 @@ func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) 
 		if err := bdb.Update(func(tx *bolt.Tx) error {
 			bk := tx.Bucket(db.DefaultBucket)
 			if r := bk.Get([]byte(plotUrl)); r != nil {
-				return fmt.Errorf("chia plot file url: %s already added", plotUrl)
+				return fmt.Errorf("spacemesh plot file url: %s already added", plotUrl)
 			}
 			meta := task.Meta{
 				Status:    task.TaskTodo,
@@ -349,7 +349,7 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		bk := tx.Bucket(db.DefaultBucket)
 		r := bk.Get([]byte(input.PlotFile))
 		if r == nil {
-			return fmt.Errorf("chia plot file %v not found", input.PlotFile)
+			return fmt.Errorf("spacemesh plot file %v not found", input.PlotFile)
 		}
 		meta := task.Meta{}
 		if err := json.Unmarshal(r, &meta); err != nil {
@@ -408,7 +408,7 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		bk := tx.Bucket(db.DefaultBucket)
 		r := bk.Get([]byte(input.PlotFile))
 		if r == nil {
-			return fmt.Errorf("chia plot file %v not find", input.PlotFile)
+			return fmt.Errorf("spacemesh plot file %v not find", input.PlotFile)
 		}
 
 		// 删除原有的

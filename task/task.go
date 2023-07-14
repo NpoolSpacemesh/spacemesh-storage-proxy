@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	log "github.com/EntropyPool/entropy-logger"
-	"github.com/NpoolChia/chia-storage-proxy/db"
-	"github.com/NpoolChia/chia-storage-server/chiaapi"
-	apitypes "github.com/NpoolChia/chia-storage-server/types"
+	"github.com/NpoolSpacemesh/spacemesh-storage-proxy/db"
+	"github.com/NpoolSpacemesh/spacemesh-storage-server/api"
+	apitypes "github.com/NpoolSpacemesh/spacemesh-storage-server/types"
 	"github.com/boltdb/bolt"
 )
 
@@ -19,7 +19,7 @@ const PlotFileHandle = PlotFilePrefix + "/"
 
 func Upload(input Meta) {
 	log.Infof(log.Fields{}, "try to serve file %v -> %v", input.PlotURL, input.Host)
-	_, err := chiaapi.UploadChiaPlot(input.Host, "18080", apitypes.UploadPlotInput{
+	_, err := api.UploadPlot(input.Host, "18080", apitypes.UploadPlotInput{
 		PlotURL:   input.PlotURL,
 		FinishURL: input.FinishURL,
 		FailURL:   input.FailURL,

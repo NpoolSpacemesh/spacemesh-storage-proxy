@@ -2,12 +2,12 @@
 
 ## 主要修改内容
 1. 异步监听配置文件的变更, 实时加载, 如果修改配置文件出错，会还原回原来的配置
-2. 异步通知 **chia-storage-server** 服务拉取最新的 **plot** 文件
+2. 异步通知 **spacemesh-storage-server** 服务拉取最新的 **plot** 文件
 
 ## 配置文件
 ```json
 {
-  "db_path": "/etc/chia-storage-proxy.db",
+  "db_path": "/etc/spacemesh-storage-proxy.db",
   "localplot": false,
   "host": "127.0.0.1",
   "port": 10089,
@@ -20,13 +20,13 @@
 
 ## service 文件
 ```
-cat << EOF > /etc/systemd/system/chia-storage-proxy.service
+cat << EOF > /etc/systemd/system/spacemesh-storage-proxy.service
 [Unit]
 Description=Chia Plotter
 After=lotus-mount-disk.service
 
 [Service]
-ExecStart=/usr/local/bin/chia-storage-proxy --config /etc/chia-storage-proxy.conf
+ExecStart=/usr/local/bin/spacemesh-storage-proxy --config /etc/spacemesh-storage-proxy.conf
 Restart=always
 RestartSec=10
 MemoryAccounting=true
@@ -53,18 +53,18 @@ WantedBy=multi-user.target
 
 部署相关的文件
 
-+ chia-storage-proxy
-+ chia-storage-proxy.conf
-+ chia-storage-proxy.service
++ spacemesh-storage-proxy
++ spacemesh-storage-proxy.conf
++ spacemesh-storage-proxy.service
 
 | 文件                       | 部署路径            | 说明         |
 | :------------------------- | :------------------ | :----------- |
-| chia-storage-proxy         | /usr/local/bin      |              |
-| chia-storage-proxy.conf    | /etc                | 配置文件     |
-| chia-storage-proxy.service | /etc/systemd/system | service 文件 |
+| spacemesh-storage-proxy         | /usr/local/bin      |              |
+| spacemesh-storage-proxy.conf    | /etc                | 配置文件     |
+| spacemesh-storage-proxy.service | /etc/systemd/system | service 文件 |
 
 **注**
-**chia-storage-proxy** 服务要设置自启动
+**spacemesh-storage-proxy** 服务要设置自启动
 ```
-  systemctl enable chia-storage-proxy
+  systemctl enable spacemesh-storage-proxy
 ```

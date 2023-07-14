@@ -1,9 +1,9 @@
 [Unit]
-Description=Chia Plotter
+Description=Spacemesh Plotter
 After=lotus-mount-disk.service
 
 [Service]
-ExecStart=/usr/local/bin/chia-storage-proxy
+ExecStart=/usr/local/bin/spacemesh-storage-proxy
 Restart=always
 RestartSec=10
 MemoryAccounting=true
