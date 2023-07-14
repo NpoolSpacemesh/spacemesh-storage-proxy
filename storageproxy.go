@@ -31,6 +31,7 @@ type StorageProxyConfig struct {
 	Port           int      `json:"port"`
 	FileServerPort int      `json:"file_server_port"`
 	StorageHosts   []string `json:"storage_hosts"`
+	PlotPaths      []string `json:"plot_paths"`
 }
 
 type StorageProxy struct {
@@ -164,6 +165,7 @@ func (p *StorageProxy) Run() error {
 
 	httpdaemon.Run(p.config.Port)
 	go p.serveFile()
+	go p.indexer()
 
 	return nil
 }
@@ -205,6 +207,112 @@ func (p *StorageProxy) postPlotFile(file string) error {
 	}
 
 	return err
+}
+
+func (p *StorageProxy) indexPath(_path string) error {
+	err := filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
+		log.Infof(log.Fields{}, "index %v in %v", path, _path)
+		if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
+			return nil
+		}
+		if err != nil {
+			return nil
+		}
+		if info == nil {
+			log.Infof(log.Fields{}, "%v do not have valid info", path)
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if info.Size() == 0 {
+			return nil
+		}
+
+		var (
+			file, host string
+		)
+		p.mutex.Lock()
+		selectedHostIndex := p.curHostIndex
+		p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
+		p.mutex.Unlock()
+		host = p.config.StorageHosts[selectedHostIndex]
+
+		if strings.HasPrefix(path, "/") {
+			file = strings.Replace(path, "/", "", 1)
+		}
+
+		if p.config.LocalPlot {
+			host = p.config.LocalHost
+		}
+
+		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
+		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
+		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+
+		// 入库
+		// 更新数据库的数据的状态
+		bdb, err := db.BoltClient()
+		if err != nil {
+			log.Infof(log.Fields{}, "get bolt db client error %v", path)
+			return nil
+		}
+		if err := bdb.Update(func(tx *bolt.Tx) error {
+			bk := tx.Bucket(db.DefaultBucket)
+			if r := bk.Get([]byte(plotUrl)); r != nil {
+				return fmt.Errorf("spacemesh plot file url: %s already added", plotUrl)
+			}
+			meta := task.Meta{
+				Status:    task.TaskTodo,
+				Host:      host,
+				PlotURL:   plotUrl,
+				FinishURL: finishUrl,
+				FailURL:   failUrl,
+			}
+			ms, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			return bk.Put([]byte(plotUrl), ms)
+		}); err != nil {
+			log.Errorf(log.Fields{}, "%v fail to bolt database %v", plotUrl, err)
+			return nil
+		}
+
+		for {
+			_, err := os.Stat(path)
+			if err == nil {
+				log.Infof(log.Fields{}, "Waiting for %v finish", path)
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			if os.IsNotExist(err) {
+				log.Infof(log.Fields{}, "%v finished", path)
+				break
+			}
+			log.Errorf(log.Fields{}, "CANNOT determine %v's stat", path)
+			break
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", _path, err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *StorageProxy) indexer() {
+	ticker := time.NewTicker(5 * time.Minute)
+	for range ticker.C {
+		for _, _path := range p.config.PlotPaths {
+			if err := p.indexPath(_path); err != nil {
+				log.Errorf(log.Fields{}, "fail to index %v: %v", _path, err)
+			}
+		}
+	}
 }
 
 func (p *StorageProxy) NewPlotRequest(w http.ResponseWriter, req *http.Request) (interface{}, string, int) {
