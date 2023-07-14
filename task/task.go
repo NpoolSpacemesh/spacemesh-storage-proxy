@@ -52,7 +52,7 @@ func Finsih(input Meta) {
 		return
 	}
 
-	os.RemoveAll(files[1])
+	// os.RemoveAll(files[1])
 	// 更新数据库
 	update(input.PlotURL, TaskDone)
 }

@@ -210,9 +210,60 @@ func (p *StorageProxy) postPlotFile(file string) error {
 }
 
 func (p *StorageProxy) indexPath(_path string) error {
+	keys := []string{}
 	err := filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
-		log.Infof(log.Fields{}, "index %v in %v", path, _path)
+		if err != nil {
+			return nil
+		}
+		if info == nil {
+			log.Infof(log.Fields{}, "%v do not have valid info", path)
+			return nil
+		}
+		if path == _path {
+			return nil
+		}
+		if info.IsDir() {
+			log.Infof(log.Fields{}, "index %v in %v", path, _path)
+			keys = append(keys, path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", _path, err)
+		return err
+	}
+
+	for _, key := range keys {
+		if err := p.indexKey(key); err != nil {
+			log.Errorf(log.Fields{}, "fail to index %v/%v: %v", _path, key, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *StorageProxy) indexKey(_path string) error {
+	const progressFile = "progress.json"
+
+	type progress struct {
+		FileIndex int  `json:"file_index"`
+		Completed bool `json:"completed"`
+	}
+	pg := progress{}
+	b, err := ioutil.ReadFile(filepath.Join(_path, progressFile))
+	if err == nil {
+		if err := json.Unmarshal(b, &pg); err != nil {
+			return err
+		}
+	}
+
+	plotUrls := []string{}
+
+	err = filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
 		if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
+			return nil
+		}
+		if path == progressFile {
 			return nil
 		}
 		if err != nil {
@@ -228,7 +279,7 @@ func (p *StorageProxy) indexPath(_path string) error {
 		if info.Size() == 0 {
 			return nil
 		}
-
+		log.Infof(log.Fields{}, "index %v in %v", path, _path)
 		var (
 			file, host string
 		)
@@ -249,6 +300,7 @@ func (p *StorageProxy) indexPath(_path string) error {
 		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
 		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
 		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+		plotUrls = append(plotUrls, plotUrl)
 
 		// 入库
 		// 更新数据库的数据的状态
@@ -279,21 +331,6 @@ func (p *StorageProxy) indexPath(_path string) error {
 			return nil
 		}
 
-		for {
-			_, err := os.Stat(path)
-			if err == nil {
-				log.Infof(log.Fields{}, "Waiting for %v finish", path)
-				time.Sleep(10 * time.Second)
-				continue
-			}
-			if os.IsNotExist(err) {
-				log.Infof(log.Fields{}, "%v finished", path)
-				break
-			}
-			log.Errorf(log.Fields{}, "CANNOT determine %v's stat", path)
-			break
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -301,11 +338,59 @@ func (p *StorageProxy) indexPath(_path string) error {
 		return err
 	}
 
+	if !pg.Completed {
+		return nil
+	}
+
+	log.Infof(log.Fields{}, "path %v plot completed, check its status", _path)
+	keyDone := true
+	bdb, err := db.BoltClient()
+	if err != nil {
+		return err
+	}
+
+	for _, plotUrl := range plotUrls {
+		if err := bdb.View(func(tx *bolt.Tx) error {
+			bk := tx.Bucket(db.DefaultBucket)
+			r := bk.Get([]byte(plotUrl))
+			if r == nil {
+				return fmt.Errorf("invalid ploturl %v", plotUrl)
+			}
+			meta := task.Meta{}
+			if err := json.Unmarshal(r, &meta); err != nil {
+				return err
+			}
+			if meta.Status != task.TaskDone {
+				keyDone = false
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if !keyDone {
+			return nil
+		}
+	}
+
+	log.Infof(log.Fields{}, "path %v transfer done, try to remove it", _path)
+	os.RemoveAll(_path)
+	for _, plotUrl := range plotUrls {
+		if err := bdb.Update(func(tx *bolt.Tx) error {
+			bk := tx.Bucket(db.DefaultBucket)
+			if err := bk.Delete([]byte(plotUrl)); err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (p *StorageProxy) indexer() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	for range ticker.C {
 		for _, _path := range p.config.PlotPaths {
 			if err := p.indexPath(_path); err != nil {
