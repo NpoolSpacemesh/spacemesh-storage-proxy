@@ -22,7 +22,7 @@
 ```
 cat << EOF > /etc/systemd/system/spacemesh-storage-proxy.service
 [Unit]
-Description=Chia Plotter
+Description=Spacemesh Plotter
 After=lotus-mount-disk.service
 
 [Service]
