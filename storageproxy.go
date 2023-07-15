@@ -316,7 +316,7 @@ func (p *StorageProxy) indexKey(_path string) error {
 		if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
 			return nil
 		}
-		if path == progressFile {
+		if strings.Contains(path, progressFile) {
 			return nil
 		}
 		if err != nil {
@@ -333,7 +333,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 			return nil
 		}
 
-		log.Infof(log.Fields{}, "index %v in %v", path, _path)
 		file := path
 		if strings.HasPrefix(path, "/") {
 			file = strings.Replace(path, "/", "", 1)
@@ -350,6 +349,8 @@ func (p *StorageProxy) indexKey(_path string) error {
 				host = p.config.LocalHost
 			}
 		}
+
+		log.Infof(log.Fields{}, "index %v in %v to %v", path, _path, host)
 
 		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
 		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
