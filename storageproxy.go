@@ -257,8 +257,61 @@ func (p *StorageProxy) indexKey(_path string) error {
 		}
 	}
 
-	plotUrls := []string{}
+	host := ""
+	if !p.config.LocalPlot {
+		err = filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
+			if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
+				return nil
+			}
+			if err != nil {
+				return nil
+			}
+			if info == nil {
+				log.Infof(log.Fields{}, "%v do not have valid info", path)
+				return nil
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if info.Size() == 0 {
+				return nil
+			}
 
+			file := path
+			if strings.HasPrefix(path, "/") {
+				file = strings.Replace(path, "/", "", 1)
+			}
+			plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
+
+			bdb, err := db.BoltClient()
+			if err != nil {
+				log.Infof(log.Fields{}, "get bolt db client error %v", path)
+				return nil
+			}
+			if err := bdb.Update(func(tx *bolt.Tx) error {
+				bk := tx.Bucket(db.DefaultBucket)
+				r := bk.Get([]byte(plotUrl))
+				if r == nil {
+					return nil
+				}
+				meta := task.Meta{}
+				if err := json.Unmarshal(r, &meta); err != nil {
+					return err
+				}
+				host = meta.Host
+				return nil
+			}); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			log.Errorf(log.Fields{}, "fail to get host %v: %v", _path, err)
+			return err
+		}
+	}
+
+	plotUrls := []string{}
 	err = filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
 		if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
 			return nil
@@ -279,22 +332,23 @@ func (p *StorageProxy) indexKey(_path string) error {
 		if info.Size() == 0 {
 			return nil
 		}
-		log.Infof(log.Fields{}, "index %v in %v", path, _path)
-		var (
-			file, host string
-		)
-		p.mutex.Lock()
-		selectedHostIndex := p.curHostIndex
-		p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
-		p.mutex.Unlock()
-		host = p.config.StorageHosts[selectedHostIndex]
 
+		log.Infof(log.Fields{}, "index %v in %v", path, _path)
+		file := path
 		if strings.HasPrefix(path, "/") {
 			file = strings.Replace(path, "/", "", 1)
 		}
 
-		if p.config.LocalPlot {
-			host = p.config.LocalHost
+		if host == "" {
+			p.mutex.Lock()
+			selectedHostIndex := p.curHostIndex
+			p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
+			p.mutex.Unlock()
+			host = p.config.StorageHosts[selectedHostIndex]
+
+			if p.config.LocalPlot {
+				host = p.config.LocalHost
+			}
 		}
 
 		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
