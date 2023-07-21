@@ -247,7 +247,7 @@ func (p *StorageProxy) indexKey(_path string) error {
 
 	type progress struct {
 		FileIndex int  `json:"file_index"`
-		Completed bool `json:"completed"`
+		Completed bool `json:"complete"`
 	}
 	pg := progress{}
 	b, err := ioutil.ReadFile(filepath.Join(_path, progressFile))
@@ -416,6 +416,7 @@ func (p *StorageProxy) indexKey(_path string) error {
 				return err
 			}
 			if meta.Status != task.TaskDone {
+				log.Infof(log.Fields{}, "%v plot completed but still fetching %v", _path, plotUrl)
 				keyDone = false
 			}
 			return nil
