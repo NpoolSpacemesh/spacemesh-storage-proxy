@@ -23,6 +23,7 @@ func Upload(input Meta) {
 		PlotURL:   input.PlotURL,
 		FinishURL: input.FinishURL,
 		FailURL:   input.FailURL,
+		DiskSpace: input.DiskSpace,
 	})
 	if err != nil {
 		log.Errorf(log.Fields{}, "fail to notify new plot -> %v", input.Host)

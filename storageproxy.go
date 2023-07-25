@@ -211,6 +211,9 @@ func (p *StorageProxy) postPlotFile(file string) error {
 
 func (p *StorageProxy) indexPath(_path string) error {
 	keys := []string{}
+	diskSpace := uint64(0)
+	metaDone := false
+
 	err := filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -226,15 +229,33 @@ func (p *StorageProxy) indexPath(_path string) error {
 			log.Infof(log.Fields{}, "index %v in %v", path, _path)
 			keys = append(keys, path)
 		}
+		if strings.HasSuffix(path, "postdata_metadata.json") {
+			metaDone = true
+			b, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			type m struct {
+				NumUnits int
+			}
+			_m := m{}
+			if err := json.Unmarshal(b, &_m); err != nil {
+				return err
+			}
+			diskSpace = uint64(_m.NumUnits * 64 * 1024 * 1024 * 1024)
+		}
 		return nil
 	})
 	if err != nil {
 		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", _path, err)
 		return err
 	}
+	if !metaDone {
+		return nil
+	}
 
 	for _, key := range keys {
-		if err := p.indexKey(key); err != nil {
+		if err := p.indexKey(key, diskSpace); err != nil {
 			log.Errorf(log.Fields{}, "fail to index %v/%v: %v", _path, key, err)
 		}
 	}
@@ -242,7 +263,7 @@ func (p *StorageProxy) indexPath(_path string) error {
 	return nil
 }
 
-func (p *StorageProxy) indexKey(_path string) error {
+func (p *StorageProxy) indexKey(_path string, diskSpace uint64) error {
 	const progressFile = "progress.json"
 
 	type progress struct {
@@ -375,6 +396,7 @@ func (p *StorageProxy) indexKey(_path string) error {
 				PlotURL:   plotUrl,
 				FinishURL: finishUrl,
 				FailURL:   failUrl,
+				DiskSpace: diskSpace,
 			}
 			ms, err := json.Marshal(meta)
 			if err != nil {

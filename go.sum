@@ -4,8 +4,8 @@ github.com/EntropyPool/entropy-logger v0.0.0-20210320022718-3091537e035f h1:oSny
 github.com/EntropyPool/entropy-logger v0.0.0-20210320022718-3091537e035f/go.mod h1:perlDQKCtiDeoe5S/iS6VlZluvMQ6KMDb6V23ulWMV4=
 github.com/NpoolRD/http-daemon v0.0.0-20210505073728-a1d91b8af9df h1:YZaFCGAilg1pQz30jSG7d/s2e0tvh4iZwtyJvqjvu7g=
 github.com/NpoolRD/http-daemon v0.0.0-20210505073728-a1d91b8af9df/go.mod h1:1zc5D8V0YuVLbkAOLaWY7V4jaZ4iqOibGvJcx+SpZOM=
-github.com/NpoolSpacemesh/spacemesh-storage-server v0.1.1-0.20230714082728-2db58c48f0f8 h1:8EDCcBsEB20ZpLnS49vZlhbhtLLAklT+/sMwypwlMlw=
-github.com/NpoolSpacemesh/spacemesh-storage-server v0.1.1-0.20230714082728-2db58c48f0f8/go.mod h1:0luasW0wjgIqNbblXfT/M0UGc+vmyLAU/SNVc0szRMQ=
+github.com/NpoolSpacemesh/spacemesh-storage-server v0.1.1-0.20230725112445-49d0f14fc327 h1:7iSfK35RgnXY9gwifBhOV4xKkgQ5BrOxUjtlsvVPD3w=
+github.com/NpoolSpacemesh/spacemesh-storage-server v0.1.1-0.20230725112445-49d0f14fc327/go.mod h1:0luasW0wjgIqNbblXfT/M0UGc+vmyLAU/SNVc0szRMQ=
 github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=
 github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx27Ps=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d h1:U+s90UTSYgptZMwQh2aRr3LuazLJIa+Pg3Kc1ylSYVY=

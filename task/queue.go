@@ -33,6 +33,7 @@ type Meta struct {
 	PlotURL   string `json:"plot_url"`
 	FailURL   string `json:"fail_url"`
 	FinishURL string `json:"finish_url"`
+	DiskSpace uint64 `json:"disk_space"`
 }
 
 type queue struct {
