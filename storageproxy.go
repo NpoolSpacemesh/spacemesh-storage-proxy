@@ -676,7 +676,11 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		if err != nil {
 			return err
 		}
-		return bk.Put([]byte(plotUrl), ms)
+		go func() {
+			<-time.After(time.Minute)
+			bk.Put([]byte(plotUrl), ms)
+		}()
+		return nil
 	}); err != nil {
 		return nil, err.Error(), -5
 	}
