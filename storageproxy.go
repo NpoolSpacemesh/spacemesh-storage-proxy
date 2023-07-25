@@ -288,7 +288,7 @@ func (p *StorageProxy) indexKey(_path string) error {
 				log.Infof(log.Fields{}, "get bolt db client error %v", path)
 				return nil
 			}
-			if err := bdb.Update(func(tx *bolt.Tx) error {
+			if err := bdb.View(func(tx *bolt.Tx) error {
 				bk := tx.Bucket(db.DefaultBucket)
 				r := bk.Get([]byte(plotUrl))
 				if r == nil {
@@ -629,24 +629,16 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		return nil, err.Error(), -2
 	}
 
-	p.mutex.Lock()
-	selectedHostIndex := p.curHostIndex
-	p.curHostIndex = (p.curHostIndex + 1) % len(p.config.StorageHosts)
-	p.mutex.Unlock()
-	host := p.config.StorageHosts[selectedHostIndex]
-
 	_u, err := url.Parse(input.PlotFile)
 	if err != nil {
 		return nil, err.Error(), -3
 	}
 
-	if p.config.LocalPlot {
-		host = p.config.LocalHost
-	}
-
 	plotUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.FileServerPort, _u.Path)
 	finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
 	failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+
+	log.Infof(log.Fields{}, "req %v from %v fail", input.PlotFile, req.Host)
 
 	// 更新数据库的数据的状态
 	bdb, err := db.BoltClient()
@@ -665,10 +657,17 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 			return err
 		}
 
+		meta := task.Meta{}
+		if err := json.Unmarshal(r, &meta); err != nil {
+			return err
+		}
+
+		log.Infof(log.Fields{}, "redo %v to %v", plotUrl, meta.Host)
+
 		// 重新选择别的存储节点
-		meta := task.Meta{
+		meta = task.Meta{
 			Status:    task.TaskTodo,
-			Host:      host,
+			Host:      meta.Host,
 			PlotURL:   plotUrl,
 			FailURL:   failUrl,
 			FinishURL: finishUrl,
