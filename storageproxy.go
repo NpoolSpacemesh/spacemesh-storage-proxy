@@ -293,6 +293,9 @@ func (p *StorageProxy) indexKey(_path string) error {
 	}
 
 	host := ""
+	keys := _m.NumUnits * 2
+	keysDone := 0
+
 	if !p.config.LocalPlot {
 		err = filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
 			if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
@@ -462,11 +465,14 @@ func (p *StorageProxy) indexKey(_path string) error {
 				log.Infof(log.Fields{}, "%v plot completed but still fetching %v", _path, plotUrl)
 				keyDone = false
 			}
+			if meta.Status == task.TaskDone && !strings.HasSuffix(plotUrl, ".json") {
+				keysDone += 1
+			}
 			return nil
 		}); err != nil {
 			return err
 		}
-		if !keyDone {
+		if !keyDone && keysDone < keys {
 			return nil
 		}
 	}
@@ -632,6 +638,9 @@ func (p *StorageProxy) FinishPlotRequest(w http.ResponseWriter, req *http.Reques
 		log.Errorf(log.Fields{}, "fail to parse body of %v: %v", req.URL, err)
 		return nil, err.Error(), -2
 	}
+
+	log.Infof(log.Fields{}, "plot req %v from %v finish", input.PlotFile, req.Host)
+
 	// 更新数据库的数据的状态
 	bdb, err := db.BoltClient()
 	if err != nil {
@@ -681,7 +690,7 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 	finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
 	failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
 
-	log.Infof(log.Fields{}, "req %v from %v fail", input.PlotFile, req.Host)
+	log.Infof(log.Fields{}, "plot req %v from %v fail", input.PlotFile, req.Host)
 
 	// 更新数据库的数据的状态
 	bdb, err := db.BoltClient()
