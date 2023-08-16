@@ -217,14 +217,12 @@ func (p *StorageProxy) indexPath(_path string) error {
 			return nil
 		}
 		if info == nil {
-			log.Infof(log.Fields{}, "%v do not have valid info", path)
 			return nil
 		}
 		if path == _path {
 			return nil
 		}
 		if info.IsDir() {
-			log.Infof(log.Fields{}, "index %v in %v", path, _path)
 			keys = append(keys, path)
 		}
 		return nil
@@ -305,7 +303,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 				return nil
 			}
 			if info == nil {
-				log.Infof(log.Fields{}, "%v do not have valid info", path)
 				return nil
 			}
 			if info.IsDir() {
@@ -323,7 +320,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 
 			bdb, err := db.BoltClient()
 			if err != nil {
-				log.Infof(log.Fields{}, "get bolt db client error %v", path)
 				return nil
 			}
 			if err := bdb.View(func(tx *bolt.Tx) error {
@@ -390,8 +386,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 			}
 		}
 
-		log.Infof(log.Fields{}, "index %v in %v to %v", path, _path, host)
-
 		plotUrl := fmt.Sprintf("http://%v:%v%v/%v", p.config.LocalHost, p.config.FileServerPort, task.PlotFilePrefix, file)
 		finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
 		failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
@@ -435,7 +429,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 		return nil
 	})
 	if err != nil {
-		log.Errorf(log.Fields{}, "fail to notify new plot %v: %v", _path, err)
 		return err
 	}
 
