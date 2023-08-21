@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -346,7 +345,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 	}
 
 	plotUrls := []string{}
-	onlyJson := true
 
 	err = filepath.Walk(_path, func(path string, info os.FileInfo, err error) error {
 		if !strings.HasSuffix(path, ".bin") && !strings.HasSuffix(path, ".json") {
@@ -405,9 +403,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 					return fmt.Errorf("spacemesh plot file url: %s already added", plotUrl)
 				}
 			}
-			if !strings.HasSuffix(path, ".json") {
-				onlyJson = false
-			}
 			meta := task.Meta{
 				Status:    task.TaskTodo,
 				Host:      host,
@@ -442,7 +437,6 @@ func (p *StorageProxy) indexKey(_path string) error {
 	if err != nil {
 		return err
 	}
-
 	for _, plotUrl := range plotUrls {
 		if err := bdb.View(func(tx *bolt.Tx) error {
 			bk := tx.Bucket(db.DefaultBucket)
@@ -454,20 +448,22 @@ func (p *StorageProxy) indexKey(_path string) error {
 			if err := json.Unmarshal(r, &meta); err != nil {
 				return err
 			}
-			if meta.Status != task.TaskDone && !onlyJson {
+			if strings.HasSuffix(plotUrl, ".json") || strings.HasSuffix(plotUrl, "key.bin") || strings.HasSuffix(plotUrl, "post.bin") {
+				return nil
+			}
+			if meta.Status != task.TaskDone {
 				log.Infof(log.Fields{}, "%v plot completed but still fetching %v", _path, plotUrl)
 				keyDone = false
+				return nil
 			}
-			if meta.Status == task.TaskDone && !strings.HasSuffix(plotUrl, ".json") {
-				keysDone += 1
-			}
+			keysDone += 1
 			return nil
 		}); err != nil {
 			return err
 		}
-		if !keyDone && keysDone < keys {
-			return nil
-		}
+	}
+	if !keyDone && keysDone < keys {
+		return nil
 	}
 
 	log.Infof(log.Fields{}, "path %v transfer done, try to remove it", _path)
@@ -674,14 +670,16 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 		return nil, err.Error(), -2
 	}
 
-	_u, err := url.Parse(input.PlotFile)
-	if err != nil {
-		return nil, err.Error(), -3
-	}
+	/*
+		_u, err := url.Parse(input.PlotFile)
+		if err != nil {
+			return nil, err.Error(), -3
+		}
+	*/
 
-	plotUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.FileServerPort, _u.Path)
-	finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
-	failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
+	// plotUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.FileServerPort, _u.Path)
+	// finishUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FinishPlotAPI)
+	// failUrl := fmt.Sprintf("http://%v:%v%v", p.config.LocalHost, p.config.Port, types.FailPlotAPI)
 
 	log.Infof(log.Fields{}, "plot req %v from %v fail", input.PlotFile, req.Host)
 
@@ -692,39 +690,43 @@ func (p *StorageProxy) FailPlotRequest(w http.ResponseWriter, req *http.Request)
 	}
 	if err := bdb.Update(func(tx *bolt.Tx) error {
 		bk := tx.Bucket(db.DefaultBucket)
-		r := bk.Get([]byte(input.PlotFile))
-		if r == nil {
-			return fmt.Errorf("spacemesh plot file %v not find", input.PlotFile)
-		}
+		/*
+			r := bk.Get([]byte(input.PlotFile))
+			if r == nil {
+				return fmt.Errorf("spacemesh plot file %v not find", input.PlotFile)
+			}
+		*/
 
 		// 删除原有的
 		if err := bk.Delete([]byte(input.PlotFile)); err != nil {
 			return err
 		}
 
-		meta := task.Meta{}
-		if err := json.Unmarshal(r, &meta); err != nil {
-			return err
-		}
+		/*
+			meta := task.Meta{}
+			if err := json.Unmarshal(r, &meta); err != nil {
+				return err
+			}
 
-		log.Infof(log.Fields{}, "redo %v to %v", plotUrl, meta.Host)
+			log.Infof(log.Fields{}, "redo %v to %v", plotUrl, meta.Host)
 
-		// 重新选择别的存储节点
-		meta = task.Meta{
-			Status:    task.TaskTodo,
-			Host:      meta.Host,
-			PlotURL:   plotUrl,
-			FailURL:   failUrl,
-			FinishURL: finishUrl,
-		}
-		ms, err := json.Marshal(meta)
-		if err != nil {
-			return err
-		}
-		go func() {
-			<-time.After(time.Minute)
-			bk.Put([]byte(plotUrl), ms)
-		}()
+			// 重新选择别的存储节点
+			meta = task.Meta{
+				Status:    task.TaskTodo,
+				Host:      meta.Host,
+				PlotURL:   plotUrl,
+				FailURL:   failUrl,
+				FinishURL: finishUrl,
+			}
+			ms, err := json.Marshal(meta)
+			if err != nil {
+				return err
+			}
+			go func() {
+				<-time.After(time.Minute)
+				bk.Put([]byte(plotUrl), ms)
+			}()
+		*/
 		return nil
 	}); err != nil {
 		return nil, err.Error(), -5
