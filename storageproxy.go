@@ -110,7 +110,9 @@ func restore(dst, src string) error {
 }
 
 func NewStorageProxy(cfgFile string) *StorageProxy {
-	proxy := &StorageProxy{}
+	proxy := &StorageProxy{
+		scannableAt: map[string]uint32{},
+	}
 	buf, err := ioutil.ReadFile(cfgFile)
 	if err != nil {
 		log.Errorf(log.Fields{}, "cannot read config file %v: %v", cfgFile, err)
