@@ -37,6 +37,7 @@ type StorageProxy struct {
 	config       StorageProxyConfig
 	curHostIndex int
 	mutex        sync.Mutex
+	scannableAt  map[string]uint32
 }
 
 var (
@@ -232,7 +233,14 @@ func (p *StorageProxy) indexPath(_path string) error {
 	}
 
 	for _, key := range keys {
+		scannableAt, ok := p.scannableAt[key]
+		if ok {
+			if uint32(time.Now().Unix()) < scannableAt {
+				continue
+			}
+		}
 		if err := p.indexKey(key); err != nil {
+			p.scannableAt[key] = uint32(time.Now().Unix()) + 3600
 			log.Errorf(log.Fields{}, "fail to index %v/%v: %v", _path, key, err)
 		}
 	}
